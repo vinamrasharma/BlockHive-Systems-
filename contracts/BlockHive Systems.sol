@@ -1,40 +1,97 @@
-@title TokenAuditTrail
-/@dev This contract tracks transfers of an ERC20-like token and stores an immutable log of each transaction.
-contract TokenAuditTrail {
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
 
+/**
+ * @title BlockHive Systems
+ * @notice A decentralized data collaboration hub enabling users to securely store, verify,
+ *         and share digital assets or datasets on-chain with full transparency.
+ */
+contract Project {
     address public admin;
+    uint256 public datasetCount;
 
-    struct TransferRecord {
-        address from;
-        address to;
-        uint256 amount;
+    struct DataSet {
+        uint256 id;
+        address owner;
+        string dataHash;
+        string description;
         uint256 timestamp;
-        bytes32 txHash;  Array to store all transfer records immutably
-    TransferRecord[] public transferRecords;
-
-    @notice Logs a token transfer event immutably
-    /@param to Address tokens sent to
-    /@param txHash The hash of the original token transfer transaction
-    function logTransfer(address from, address to, uint256 amount, bytes32 txHash) external onlyAdmin {
-        TransferRecord memory record = TransferRecord({
-            from: from,
-            to: to,
-            amount: amount,
-            timestamp: block.timestamp,
-            txHash: txHash
-        });
-        transferRecords.push(record);
-
-        emit TransferLogged(from, to, amount, block.timestamp, txHash);
+        bool verified;
     }
 
-    /@notice Returns a transfer record at a specific index
-    /// @param index The index of the transfer record
-    function getTransferRecord(uint256 index) external view returns (TransferRecord memory) {
-        require(index < transferRecords.length, "Index out of bounds");
-        return transferRecords[index];
+    mapping(uint256 => DataSet) public datasets;
+
+    event DataSetAdded(uint256 indexed id, address indexed owner, string dataHash, string description);
+    event DataSetVerified(uint256 indexed id, address indexed verifier);
+    event OwnershipTransferred(uint256 indexed id, address indexed oldOwner, address indexed newOwner);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin can perform this action");
+        _;
+    }
+
+    modifier onlyOwner(uint256 _id) {
+        require(datasets[_id].owner == msg.sender, "Not dataset owner");
+        _;
+    }
+
+    constructor() {
+        admin = msg.sender;
+    }
+
+    /**
+     * @notice Add a new dataset to BlockHive
+     * @param _dataHash IPFS or SHA256 hash of the dataset
+     * @param _description Short description of the dataset
+     */
+    function addDataSet(string memory _dataHash, string memory _description) external {
+        require(bytes(_dataHash).length > 0, "Data hash required");
+        require(bytes(_description).length > 0, "Description required");
+
+        datasetCount++;
+        datasets[datasetCount] = DataSet(
+            datasetCount,
+            msg.sender,
+            _dataHash,
+            _description,
+            block.timestamp,
+            false
+        );
+
+        emit DataSetAdded(datasetCount, msg.sender, _dataHash, _description);
+    }
+
+    /**
+     * @notice Admin verifies dataset authenticity
+     * @param _id Dataset ID
+     */
+    function verifyDataSet(uint256 _id) external onlyAdmin {
+        require(_id > 0 && _id <= datasetCount, "Invalid dataset ID");
+        require(!datasets[_id].verified, "Already verified");
+
+        datasets[_id].verified = true;
+        emit DataSetVerified(_id, msg.sender);
+    }
+
+    /**
+     * @notice Transfer ownership of dataset
+     * @param _id Dataset ID
+     * @param _newOwner Address of new dataset owner
+     */
+    function transferOwnership(uint256 _id, address _newOwner) external onlyOwner(_id) {
+        require(_newOwner != address(0), "Invalid new owner");
+        address oldOwner = datasets[_id].owner;
+        datasets[_id].owner = _newOwner;
+
+        emit OwnershipTransferred(_id, oldOwner, _newOwner);
+    }
+
+    /**
+     * @notice View dataset details
+     * @param _id Dataset ID
+     */
+    function getDataSet(uint256 _id) external view returns (DataSet memory) {
+        require(_id > 0 && _id <= datasetCount, "Invalid dataset ID");
+        return datasets[_id];
     }
 }
-// 
-update
-// 
